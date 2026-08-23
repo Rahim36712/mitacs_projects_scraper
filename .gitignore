@@ -16,3 +16,4 @@ venv/
 Thumbs.db
 *.log
 *.tmp
+mitacs_scraper/data/ui_exports/

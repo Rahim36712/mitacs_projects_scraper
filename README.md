@@ -1,63 +1,84 @@
 # MITACS Project Scraper
 
-A user-friendly web app for scraping MITACS Globalink project listings by keyword, exporting the results to CSV or Markdown, and running multiple keywords in parallel.
+A user-friendly scraper for MITACS Globalink projects with:
+- multi-keyword parallel scraping,
+- CSV / Markdown exports,
+- optional filters,
+- local UI and cloud deployment (Vercel + Render).
 
 ## Highlights
 
-- Search MITACS projects with a live browser-driven scraper
-- Export results as CSV, Markdown, or both
-- Run several keywords at once in parallel
-- Optional filters for language, faculty province, university, campus, and more
-- Easy one-click launch on Windows
-- Clean desktop-style UI for a smoother user experience
+- Live browser-driven scraping with Playwright
+- Parallel scraping for 2-10 keywords in one run
+- Export format: CSV, Markdown, or both
+- Optional filters: language, province, university, campus, faculty names, academic achievement
+- One-click local run (`run_ui.bat`)
+- Cloud setup: Vercel frontend + Render backend API
 
-## Project structure
-
-- `mitacs_scraper/` — core scraper and Flask UI
-- `mitacs_scraper/data/` — exported CSV/Markdown outputs
-- `mitacs_scraper/scraper/` — browser-driven scraping logic
-- `run_ui.bat` — one-click launcher for Windows
-
-## Quick start
-
-### One-click run (Windows)
+## Local run (Windows)
 
 1. Open the project folder
 2. Double-click `run_ui.bat`
-3. Visit: http://127.0.0.1:5001
+3. Open `http://127.0.0.1:5001`
 
-### Manual run
+## Cloud deployment (recommended)
 
-```bash
-pip install -r mitacs_scraper/requirements.txt
-python mitacs_scraper\main.py ui --host 127.0.0.1 --port 5001
+### 1) Deploy backend API on Render
+
+This repo includes:
+- `Dockerfile`
+- `render.yaml`
+
+Steps:
+1. Push this repo to GitHub
+2. In Render, create **New Web Service** from this repo
+3. Choose Docker deploy (Render auto-detects `Dockerfile`)
+4. Deploy and copy backend URL, e.g. `https://mitacs-scraper-api.onrender.com`
+5. Verify: `https://<your-render-url>/api/health`
+
+### 2) Deploy frontend UI on Vercel
+
+This repo includes:
+- `index.html` (Vercel frontend)
+- `vercel.json`
+
+Steps:
+1. In Vercel, import this same GitHub repo
+2. Deploy as static site
+3. Open Vercel URL
+4. Paste your Render backend URL into **Backend API URL**
+5. Run scraping from browser
+
+## API endpoint
+
+`POST /api/scrape`
+
+Example JSON body:
+
+```json
+{
+  "keywords": ["microfluidics", "biomedical", "machine learning"],
+  "max_pages": 2,
+  "export_format": "both",
+  "language": "English"
+}
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:5001
-```
-
-## Usage
-
-From the web UI:
-
-- Set how many keywords you want to scrape
-- Enter each keyword in its own field
-- Choose the max pages to crawl
-- Select export format: CSV, Markdown, or both
-- Optionally add filters like language or faculty details
-- Click `Run scraper`
+The API returns:
+- record counts
+- preview rows
+- downloadable file URLs
 
 ## Output
 
-Each keyword creates its own output file in the `mitacs_scraper/data/ui_exports/` folder.
+Generated files are saved in:
+- `mitacs_scraper/data/ui_exports/`
 
 ## Notes
 
-This project uses Playwright to interact with the live MITACS website and extract the project data visible after filtering.
+- Playwright is required because MITACS project search is dynamic.
+- Vercel serverless is not used for scraping itself due browser/runtime limits; scraping runs in backend service (Render/Railway style).
 
 ## License
 
-This project is provided for educational and research purposes.
+Educational and research use.

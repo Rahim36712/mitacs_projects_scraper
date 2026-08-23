@@ -5,11 +5,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+from flask import Flask, jsonify, render_template, request, send_from_directory, url_for
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-from flask import Flask, send_from_directory, render_template, request, url_for
 
 from mitacs_scraper.scraper.final_ui_scraper import scrape_keyword
 
@@ -104,20 +104,95 @@ def parse_keyword_batch(form: Dict[str, Any]) -> List[str]:
     return keywords
 
 
-def parse_filters(form: Dict[str, Any]) -> Dict[str, str]:
+def parse_keyword_list(payload: Dict[str, Any]) -> List[str]:
+    raw_keywords = payload.get("keywords")
+    if isinstance(raw_keywords, list):
+        values = [str(item).strip() for item in raw_keywords if str(item).strip()]
+        return values[:10]
+
+    if isinstance(raw_keywords, str) and raw_keywords.strip():
+        return [raw_keywords.strip()]
+
+    fallback = str(payload.get("keyword", "")).strip()
+    if fallback:
+        return [fallback]
+    return []
+
+
+def parse_filters(values: Dict[str, Any]) -> Dict[str, str]:
     filters: Dict[str, str] = {}
     for key in FILTER_KEYS:
-        value = (form.get(key) or "").strip()
-        if value:
-            filters[key] = value
+        value = values.get(key)
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            filters[key] = normalized
     return filters
+
+
+def parse_max_pages(raw_value: Any) -> int:
+    try:
+        value = int(str(raw_value).strip()) if raw_value is not None else 0
+    except ValueError:
+        value = 0
+    if value < 0:
+        return 0
+    return value
+
+
+def run_batch_scrape(
+    keywords: List[str],
+    max_pages: int,
+    export_format: str,
+    filters: Dict[str, str],
+) -> List[Dict[str, Any]]:
+    def fetch_one(keyword: str) -> Dict[str, Any]:
+        label = build_export_label(keyword, max_pages)
+        csv_path = EXPORT_DIR / f"{label}.csv"
+        md_path = EXPORT_DIR / f"{label}.md"
+        try:
+            records = scrape_keyword(
+                keyword,
+                max_pages=max_pages,
+                output_path=str(csv_path),
+                filters=filters,
+            )
+            if export_format in {"md", "both"}:
+                export_markdown(records, keyword, md_path)
+            return {
+                "keyword": keyword,
+                "records": records,
+                "csv_path": csv_path,
+                "md_path": md_path if export_format in {"md", "both"} else None,
+                "error": None,
+            }
+        except Exception as exc:
+            return {
+                "keyword": keyword,
+                "records": [],
+                "csv_path": csv_path,
+                "md_path": None,
+                "error": str(exc),
+            }
+
+    with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
+        return list(executor.map(fetch_one, keywords))
 
 
 def create_app() -> Flask:
     app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
     app.config["SECRET_KEY"] = os.environ.get("MITACS_SECRET_KEY", "mitacs-dev-secret")
 
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        return response
+
     @app.route("/health")
+    @app.route("/api/health")
     def health():
         return {"status": "ok"}
 
@@ -139,7 +214,7 @@ def create_app() -> Flask:
     def run_scraper():
         keyword_values = parse_keyword_batch(request.form)
         export_format = (request.form.get("export_format") or "csv").lower()
-        raw_pages = (request.form.get("max_pages") or "0").strip()
+        max_pages = parse_max_pages(request.form.get("max_pages"))
         filters = parse_filters(request.form)
 
         if not keyword_values:
@@ -147,7 +222,7 @@ def create_app() -> Flask:
                 "index.html",
                 keyword_count=1,
                 keyword_values=[""],
-                max_pages=int(raw_pages) if raw_pages.isdigit() else 0,
+                max_pages=max_pages,
                 export_format=export_format,
                 preview_rows=[],
                 summary="",
@@ -155,65 +230,36 @@ def create_app() -> Flask:
                 error="Please enter at least one keyword before running the search.",
             )
 
-        try:
-            max_pages = int(raw_pages) if raw_pages else 0
-        except ValueError:
-            max_pages = 0
-        if max_pages < 0:
-            max_pages = 0
+        results = run_batch_scrape(keyword_values, max_pages, export_format, filters)
 
-        def fetch_one(keyword: str):
-            label = build_export_label(keyword, max_pages)
-            csv_path = EXPORT_DIR / f"{label}.csv"
-            try:
-                records = scrape_keyword(keyword, max_pages=max_pages, output_path=str(csv_path), filters=filters)
-                if export_format in {"md", "both"}:
-                    export_markdown(records, keyword, EXPORT_DIR / f"{label}.md")
-                return {
-                    "keyword": keyword,
-                    "records": records,
-                    "csv_path": csv_path,
-                    "md_path": EXPORT_DIR / f"{label}.md" if export_format in {"md", "both"} else None,
-                }
-            except Exception as exc:  # pragma: no cover - surfaced in UI
-                return {
-                    "keyword": keyword,
-                    "records": [],
-                    "csv_path": csv_path,
-                    "md_path": None,
-                    "error": str(exc),
-                }
-
-        with ThreadPoolExecutor(max_workers=min(4, len(keyword_values))) as executor:
-            results = list(executor.map(fetch_one, keyword_values))
-
-        valid_results = [r for r in results if r.get("records") or r.get("error")]
         download_links: List[Dict[str, str]] = []
-        for item in valid_results:
-            if item.get("error"):
+        preview_rows: List[Dict[str, str]] = []
+        total_records = 0
+        errors: List[str] = []
+
+        for item in results:
+            if item["error"]:
+                errors.append(f"{item['keyword']}: {item['error']}")
                 continue
+
+            total_records += len(item["records"])
+            if not preview_rows and item["records"]:
+                preview_rows = item["records"][:5]
+
             if export_format in {"csv", "both"}:
                 download_links.append({
                     "label": f"{item['keyword']} CSV",
                     "url": url_for("download_file", filename=item["csv_path"].name),
                 })
-            if export_format in {"md", "both"} and item.get("md_path"):
+            if export_format in {"md", "both"} and item["md_path"] is not None:
                 download_links.append({
                     "label": f"{item['keyword']} Markdown",
                     "url": url_for("download_file", filename=item["md_path"].name),
                 })
 
-        preview_rows = []
-        total_records = 0
-        for item in valid_results:
-            total_records += len(item.get("records") or [])
-            if not preview_rows and item.get("records"):
-                preview_rows = item["records"][:5]
-
         summary = f"Scraped {total_records} project(s) across {len(keyword_values)} keyword batch."
-        if any(item.get("error") for item in valid_results):
-            error_summary = "; ".join(item["error"] for item in valid_results if item.get("error"))
-            summary = summary + f" Some keywords failed: {error_summary}"
+        if errors:
+            summary = summary + " Failures: " + "; ".join(errors)
 
         return render_template(
             "index.html",
@@ -226,6 +272,70 @@ def create_app() -> Flask:
             download_links=download_links,
             error=None,
         )
+
+    @app.route("/api/scrape", methods=["POST", "OPTIONS"])
+    def api_scrape():
+        if request.method == "OPTIONS":
+            return ("", 204)
+
+        if not request.is_json:
+            return jsonify({"error": "JSON body required."}), 400
+
+        payload = request.get_json()
+        keywords = parse_keyword_list(payload or {})
+        if not keywords:
+            return jsonify({"error": "Provide at least one keyword in 'keywords' or 'keyword'."}), 400
+
+        export_format = str((payload or {}).get("export_format", "csv")).lower()
+        if export_format not in {"csv", "md", "both"}:
+            return jsonify({"error": "export_format must be one of: csv, md, both."}), 400
+
+        max_pages = parse_max_pages((payload or {}).get("max_pages", 0))
+        filters = parse_filters(payload or {})
+
+        results = run_batch_scrape(keywords, max_pages, export_format, filters)
+        files: List[Dict[str, str]] = []
+        response_items: List[Dict[str, Any]] = []
+        total_records = 0
+
+        for item in results:
+            if item["error"]:
+                response_items.append({
+                    "keyword": item["keyword"],
+                    "count": 0,
+                    "error": item["error"],
+                    "files": [],
+                })
+                continue
+
+            total_records += len(item["records"])
+            current_files: List[Dict[str, str]] = []
+            if export_format in {"csv", "both"}:
+                csv_name = item["csv_path"].name
+                csv_url = url_for("download_file", filename=csv_name, _external=True)
+                current_files.append({"type": "csv", "name": csv_name, "url": csv_url})
+                files.append({"type": "csv", "name": csv_name, "url": csv_url})
+            if export_format in {"md", "both"} and item["md_path"] is not None:
+                md_name = item["md_path"].name
+                md_url = url_for("download_file", filename=md_name, _external=True)
+                current_files.append({"type": "md", "name": md_name, "url": md_url})
+                files.append({"type": "md", "name": md_name, "url": md_url})
+
+            response_items.append({
+                "keyword": item["keyword"],
+                "count": len(item["records"]),
+                "preview": item["records"][:5],
+                "files": current_files,
+                "error": None,
+            })
+
+        return jsonify({
+            "total_keywords": len(keywords),
+            "total_records": total_records,
+            "export_format": export_format,
+            "results": response_items,
+            "files": files,
+        })
 
     @app.route("/download/<path:filename>")
     def download_file(filename: str):

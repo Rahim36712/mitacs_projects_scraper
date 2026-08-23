@@ -20,3 +20,8 @@ What is now implemented:
 Next action:
 - Use the UI to run keyword batches and verify output files in mitacs_scraper/data/ui_exports.
 - As needed, extend the optional filters to match additional live fields on the MITACS site.
+
+Deployment update:
+- Added a Vercel-compatible static frontend (`index.html`, `vercel.json`).
+- Added backend API endpoints for cloud use (`/api/health`, `/api/scrape`).
+- Added Docker-based backend deployment files for Render (`Dockerfile`, `render.yaml`).
