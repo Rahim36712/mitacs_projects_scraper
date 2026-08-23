@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from mitacs_scraper.scraper.final_ui_scraper import scrape_keyword
+from mitacs_scraper.scraper.final_ui_scraper import count_keyword, scrape_keyword
 
 BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "data" / "ui_exports"
@@ -335,6 +335,48 @@ def create_app() -> Flask:
             "export_format": export_format,
             "results": response_items,
             "files": files,
+        })
+
+    @app.route("/api/count", methods=["POST", "OPTIONS"])
+    def api_count():
+        if request.method == "OPTIONS":
+            return ("", 204)
+
+        if not request.is_json:
+            return jsonify({"error": "JSON body required."}), 400
+
+        payload = request.get_json() or {}
+        keywords = parse_keyword_list(payload)
+        if not keywords:
+            return jsonify({"error": "Provide at least one keyword in 'keywords' or 'keyword'."}), 400
+
+        filters = parse_filters(payload)
+
+        def count_one(keyword: str) -> Dict[str, Any]:
+            try:
+                info = count_keyword(keyword, filters=filters)
+                return {
+                    "keyword": keyword,
+                    "total_projects": info.get("total_projects", 0),
+                    "per_page": info.get("per_page", 0),
+                    "total_pages": info.get("total_pages", 0),
+                    "error": None,
+                }
+            except Exception as exc:
+                return {
+                    "keyword": keyword,
+                    "total_projects": 0,
+                    "per_page": 0,
+                    "total_pages": 0,
+                    "error": str(exc),
+                }
+
+        with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
+            results = list(executor.map(count_one, keywords))
+
+        return jsonify({
+            "total_keywords": len(keywords),
+            "results": results,
         })
 
     @app.route("/download/<path:filename>")

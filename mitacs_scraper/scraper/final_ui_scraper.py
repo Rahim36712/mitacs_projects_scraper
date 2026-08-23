@@ -1,7 +1,8 @@
 import csv
+import math
 import re
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 from playwright.sync_api import sync_playwright
 
@@ -226,6 +227,53 @@ def navigate_to_page(page, page_number: int):
             next_button = page.locator('.p-paginator-next').first
         except Exception:
             break
+
+
+def count_keyword(keyword: str, filters: Dict[str, str] | None = None) -> Dict[str, int]:
+    info: Dict[str, int] = {
+        'keyword': keyword,
+        'total_projects': 0,
+        'per_page': 0,
+        'total_pages': 0,
+    }
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={'width': 1600, 'height': 2000})
+        try:
+            goto_keyword_page(page, keyword, filters=filters)
+            text = get_visible_page_text(page)
+            total = detect_total_projects(page)
+            per_page = len(parse_project_blocks_from_text(text))
+
+            if per_page <= 0:
+                per_page = 10
+
+            total_pages = 0
+            if total > 0:
+                total_pages = math.ceil(total / per_page)
+            else:
+                try:
+                    page_buttons = page.locator('.p-paginator-page')
+                    numbers = []
+                    for i in range(page_buttons.count()):
+                        raw = (page_buttons.nth(i).inner_text() or '').strip()
+                        if raw.isdigit():
+                            numbers.append(int(raw))
+                    if numbers:
+                        total_pages = max(numbers)
+                except Exception:
+                    total_pages = 0
+                if total_pages <= 0:
+                    total_pages = 1
+
+            info.update({
+                'total_projects': total,
+                'per_page': per_page,
+                'total_pages': total_pages,
+            })
+        finally:
+            browser.close()
+    return info
 
 
 def scrape_keyword(keyword: str, max_pages: int = 2, output_path: str = None, filters: Dict[str, str] | None = None) -> List[Dict[str,str]]:
