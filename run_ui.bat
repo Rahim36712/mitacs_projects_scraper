@@ -18,11 +18,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem -- close any leftover server still running on port 5001 --
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5001 ^| findstr LISTENING') do (
+    echo  [i] Closing old server process ^(PID %%a^)...
+    taskkill /F /PID %%a >nul 2>nul
+)
+
 if not exist ".venv\Scripts\python.exe" (
     echo  [1/3] First run detected - setting things up ^(one time only, a few minutes^)...
     python -m venv .venv
     ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
-    ".venv\Scripts\python.exe" -m pip install flask playwright --quiet
+    ".venv\Scripts\python.exe" -m pip install flask playwright requests beautifulsoup4 lxml --quiet
     ".venv\Scripts\python.exe" -m playwright install chromium
     echo  [1/3] Setup done!
 ) else (

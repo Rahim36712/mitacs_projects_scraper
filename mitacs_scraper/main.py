@@ -10,9 +10,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from mitacs_scraper.scraper.spider import Spider
-from mitacs_scraper.storage.csv_exporter import export_csv, export_json
-from mitacs_scraper.storage.database import Database
 from mitacs_scraper import config
 
 logging.basicConfig(level=logging.INFO)
@@ -20,12 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 def cmd_discover(args):
+    from mitacs_scraper.scraper.spider import Spider
     s = Spider(rate_limit=config.RATE_LIMIT)
     info = s.run_discovery(args.url, use_dynamic_probe=args.dynamic)
     print(info)
 
 
 def cmd_crawl_sample(args):
+    from mitacs_scraper.scraper.spider import Spider
+    from mitacs_scraper.storage.csv_exporter import export_csv, export_json
+    from mitacs_scraper.storage.database import Database
     s = Spider(rate_limit=config.RATE_LIMIT)
     records = s.crawl_sample(args.url, sample_limit=args.limit)
     # persist to sqlite and exports
