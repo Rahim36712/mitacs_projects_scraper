@@ -25,3 +25,4 @@ Deployment update:
 - Added a Vercel-compatible static frontend (`index.html`, `vercel.json`).
 - Added backend API endpoints for cloud use (`/api/health`, `/api/scrape`).
 - Added Docker-based backend deployment files for Render (`Dockerfile`, `render.yaml`).
+- Added Vercel proxy functions for automatic backend URL wiring (`/api/scrape-proxy`, `/api/backend-health`).

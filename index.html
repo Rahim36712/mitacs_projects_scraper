@@ -74,14 +74,14 @@
     <div class="shell">
       <div class="card">
         <h1>MITACS Scraper Cloud UI</h1>
-        <p class="muted">Use this Vercel UI with your Render/Railway scraper backend.</p>
+        <p class="muted">Use this Vercel UI with your Render/Railway scraper backend (auto-wired).</p>
       </div>
 
       <form id="scrapeForm" class="card">
         <div class="grid">
           <div class="full">
-            <label for="backendUrl">Backend API URL</label>
-            <input id="backendUrl" placeholder="https://your-backend.onrender.com" />
+            <label for="backendUrl">Backend API URL (optional override)</label>
+            <input id="backendUrl" placeholder="Leave empty to use auto-configured Vercel backend URL" />
           </div>
 
           <div>
@@ -117,6 +117,7 @@
           <div class="full"><label for="academic_achievement">Academic Achievement</label><input id="academic_achievement" /></div>
 
           <div class="full">
+            <button type="button" id="checkBackendBtn" style="margin-bottom:8px;background:rgba(103,232,249,0.2);color:#dff9ff;border:1px solid rgba(148,163,184,0.35);">Check Backend Connection</button>
             <button type="submit">Run Scraper</button>
           </div>
         </div>
@@ -142,9 +143,38 @@
       const status = document.getElementById("status");
       const downloads = document.getElementById("downloads");
       const form = document.getElementById("scrapeForm");
+      const checkBackendBtn = document.getElementById("checkBackendBtn");
 
       const savedBackend = localStorage.getItem("mitacs_backend_url") || "";
       backendInput.value = savedBackend;
+
+      function getOverrideHeaders() {
+        const override = backendInput.value.trim().replace(/\/+$/, "");
+        if (!override) {
+          return {};
+        }
+        return { "X-Backend-Url": override };
+      }
+
+      checkBackendBtn.addEventListener("click", async () => {
+        status.textContent = "Checking backend connection...";
+        output.textContent = "";
+        try {
+          const response = await fetch("/api/backend-health", {
+            method: "GET",
+            headers: getOverrideHeaders()
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || `Health check failed: ${response.status}`);
+          }
+          status.textContent = `Backend connected: ${data.backend}`;
+          output.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+          status.textContent = `Backend check failed: ${error.message}`;
+          output.textContent = error.stack || String(error);
+        }
+      });
 
       function renderKeywordInputs() {
         const count = Math.max(1, Math.min(10, Number(keywordCount.value || 1)));
@@ -166,11 +196,11 @@
         event.preventDefault();
         downloads.innerHTML = "";
         const backend = backendInput.value.trim().replace(/\/+$/, "");
-        if (!backend) {
-          status.textContent = "Please provide backend URL.";
-          return;
+        if (backend) {
+          localStorage.setItem("mitacs_backend_url", backend);
+        } else {
+          localStorage.removeItem("mitacs_backend_url");
         }
-        localStorage.setItem("mitacs_backend_url", backend);
 
         const keywords = Array.from(keywordList.querySelectorAll("input"))
           .map((input) => input.value.trim())
@@ -197,9 +227,12 @@
         output.textContent = "";
 
         try {
-          const response = await fetch(`${backend}/api/scrape`, {
+          const response = await fetch("/api/scrape-proxy", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...getOverrideHeaders()
+            },
             body: JSON.stringify(payload)
           });
           const data = await response.json();

@@ -41,13 +41,20 @@ Steps:
 This repo includes:
 - `index.html` (Vercel frontend)
 - `vercel.json`
+- `api/scrape-proxy.js` (proxy to backend API)
+- `api/backend-health.js` (backend connectivity check)
 
 Steps:
 1. In Vercel, import this same GitHub repo
-2. Deploy as static site
-3. Open Vercel URL
-4. Paste your Render backend URL into **Backend API URL**
-5. Run scraping from browser
+2. In **Project Settings → Environment Variables**, add:
+   - `SCRAPER_BACKEND_URL = https://<your-render-url>`
+3. Redeploy Vercel
+4. Open Vercel URL
+5. Click **Check Backend Connection**
+6. Run scraping from browser
+
+Optional:
+- You can still override backend URL manually in the UI for testing.
 
 ## API endpoint
 
@@ -68,6 +75,11 @@ The API returns:
 - record counts
 - preview rows
 - downloadable file URLs
+
+## Vercel proxy endpoints
+
+- `GET /api/backend-health` → checks if Vercel can reach your backend
+- `POST /api/scrape-proxy` → forwards scraping requests from UI to backend
 
 ## Output
 
