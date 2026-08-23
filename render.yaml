@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: mitacs-scraper-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    autoDeploy: true

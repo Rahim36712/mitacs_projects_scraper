@@ -84,26 +84,6 @@ def export_markdown(records: Iterable[Dict[str, Any]], keyword: str, destination
     destination.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 
-def parse_keyword_batch(form: Dict[str, Any]) -> List[str]:
-    batch_count = form.get("keyword_count")
-    try:
-        count = int((batch_count or "1").strip() or "1")
-    except ValueError:
-        count = 1
-    count = max(1, min(count, 10))
-
-    keywords: List[str] = []
-    for index in range(1, count + 1):
-        keyword = (form.get(f"keyword_{index}") or "").strip()
-        if keyword:
-            keywords.append(keyword)
-
-    fallback = (form.get("keyword") or "").strip()
-    if fallback and not keywords:
-        keywords.append(fallback)
-    return keywords
-
-
 def parse_keyword_list(payload: Dict[str, Any]) -> List[str]:
     raw_keywords = payload.get("keywords")
     if isinstance(raw_keywords, list):
@@ -198,80 +178,7 @@ def create_app() -> Flask:
 
     @app.route("/")
     def index():
-        return render_template(
-            "index.html",
-            keyword_count=1,
-            keyword_values=[""],
-            max_pages=0,
-            export_format="csv",
-            preview_rows=[],
-            summary="",
-            download_links=[],
-            error=None,
-        )
-
-    @app.route("/run", methods=["POST"])
-    def run_scraper():
-        keyword_values = parse_keyword_batch(request.form)
-        export_format = (request.form.get("export_format") or "csv").lower()
-        max_pages = parse_max_pages(request.form.get("max_pages"))
-        filters = parse_filters(request.form)
-
-        if not keyword_values:
-            return render_template(
-                "index.html",
-                keyword_count=1,
-                keyword_values=[""],
-                max_pages=max_pages,
-                export_format=export_format,
-                preview_rows=[],
-                summary="",
-                download_links=[],
-                error="Please enter at least one keyword before running the search.",
-            )
-
-        results = run_batch_scrape(keyword_values, max_pages, export_format, filters)
-
-        download_links: List[Dict[str, str]] = []
-        preview_rows: List[Dict[str, str]] = []
-        total_records = 0
-        errors: List[str] = []
-
-        for item in results:
-            if item["error"]:
-                errors.append(f"{item['keyword']}: {item['error']}")
-                continue
-
-            total_records += len(item["records"])
-            if not preview_rows and item["records"]:
-                preview_rows = item["records"][:5]
-
-            if export_format in {"csv", "both"}:
-                download_links.append({
-                    "label": f"{item['keyword']} CSV",
-                    "url": url_for("download_file", filename=item["csv_path"].name),
-                })
-            if export_format in {"md", "both"} and item["md_path"] is not None:
-                download_links.append({
-                    "label": f"{item['keyword']} Markdown",
-                    "url": url_for("download_file", filename=item["md_path"].name),
-                })
-
-        summary = f"Scraped {total_records} project(s) across {len(keyword_values)} keyword batch."
-        if errors:
-            summary = summary + " Failures: " + "; ".join(errors)
-
-        return render_template(
-            "index.html",
-            keyword_count=len(keyword_values),
-            keyword_values=keyword_values,
-            max_pages=max_pages,
-            export_format=export_format,
-            preview_rows=preview_rows,
-            summary=summary,
-            download_links=download_links,
-            error=None,
-        )
+        return render_template("index.html")
 
     @app.route("/api/scrape", methods=["POST", "OPTIONS"])
     def api_scrape():
@@ -390,4 +297,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5001, debug=False, threaded=True)
