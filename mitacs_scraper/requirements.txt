@@ -1,0 +1,6 @@
+# Minimal requirements for the scraper. Pin versions as needed.
+scrapling
+requests
+beautifulsoup4
+lxml
+Flask>=3.0,<4.0

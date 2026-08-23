@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MITACS Project Scraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <span class="brand-mark">M</span>
+          <div>
+            <p class="brand-name">MITACS</p>
+            <p class="brand-subtitle">Project Finder</p>
+          </div>
+        </div>
+        <div class="status-pill">Live search • CSV / Markdown • Multi keyword</div>
+      </header>
+
+      <main class="content-card">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Smart discovery</p>
+            <h1>Search semester projects and export the results in a clean format.</h1>
+          </div>
+          <div class="hero-stat">
+            <strong>{{ preview_rows|length if preview_rows else 0 }}</strong>
+            <span>Preview rows</span>
+          </div>
+        </section>
+
+        <form method="post" action="{{ url_for('run_scraper') }}" class="controls-panel">
+          <div class="field-group full-span">
+            <label for="keyword_count">How many keywords?</label>
+            <input id="keyword_count" name="keyword_count" type="number" min="1" max="10" step="1" value="{{ keyword_count if keyword_count is defined else 1 }}" />
+          </div>
+
+          <div class="field-group full-span">
+            <label for="max_pages">Max pages</label>
+            <input id="max_pages" name="max_pages" type="number" min="0" step="1" value="{{ max_pages if max_pages is defined else 0 }}" />
+            <small>0 = crawl all available pages</small>
+          </div>
+
+          <div class="field-group full-span">
+            <label for="export_format">Export format</label>
+            <select id="export_format" name="export_format">
+              <option value="csv" {% if export_format == 'csv' %}selected{% endif %}>CSV</option>
+              <option value="md" {% if export_format == 'md' %}selected{% endif %}>Markdown</option>
+              <option value="both" {% if export_format == 'both' %}selected{% endif %}>CSV + Markdown</option>
+            </select>
+          </div>
+
+          <div class="keyword-block full-span">
+            <div class="keyword-header">
+              <h2>Keywords</h2>
+              <button type="button" class="secondary-btn" id="addKeywordBtn">Add keyword</button>
+            </div>
+            <div id="keywordFields" class="keyword-fields">
+              {% for keyword in keyword_values %}
+              <div class="keyword-row">
+                <input type="text" name="keyword_{{ loop.index }}" value="{{ keyword }}" placeholder="Enter keyword {{ loop.index }}" />
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="filter-block full-span">
+            <div class="filter-header">
+              <h2>Optional filters</h2>
+            </div>
+            <div class="filter-grid">
+              <div class="field-group">
+                <label for="language">Language</label>
+                <input id="language" name="language" type="text" placeholder="English, French, Either" />
+              </div>
+              <div class="field-group">
+                <label for="faculty_province">Faculty Province</label>
+                <input id="faculty_province" name="faculty_province" type="text" placeholder="Ontario" />
+              </div>
+              <div class="field-group">
+                <label for="faculty_university">Faculty University</label>
+                <input id="faculty_university" name="faculty_university" type="text" />
+              </div>
+              <div class="field-group">
+                <label for="faculty_campus">Faculty Campus</label>
+                <input id="faculty_campus" name="faculty_campus" type="text" />
+              </div>
+              <div class="field-group">
+                <label for="faculty_first_name">Faculty First Name</label>
+                <input id="faculty_first_name" name="faculty_first_name" type="text" />
+              </div>
+              <div class="field-group">
+                <label for="faculty_last_name">Faculty Last Name</label>
+                <input id="faculty_last_name" name="faculty_last_name" type="text" />
+              </div>
+              <div class="field-group full-span">
+                <label for="academic_achievement">Academic Achievement</label>
+                <input id="academic_achievement" name="academic_achievement" type="text" placeholder="CGPA, GPA, etc." />
+              </div>
+            </div>
+          </div>
+
+          <div class="submit-row full-span">
+            <button type="submit" class="primary-btn">Run scraper</button>
+          </div>
+        </form>
+
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+
+        {% if summary %}
+        <div class="summary-box">
+          <span class="summary-label">Status</span>
+          <p>{{ summary }}</p>
+        </div>
+        {% endif %}
+
+        {% if download_links %}
+        <div class="downloads-box">
+          <span class="summary-label">Downloads</span>
+          <div class="download-list">
+            {% for item in download_links %}
+              <a class="download-link" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.label }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if preview_rows %}
+        <section class="preview-box">
+          <div class="preview-header">
+            <h2>Preview</h2>
+            <span>{{ preview_rows|length }} sample rows</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Start date</th>
+                  <th>Language</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in preview_rows %}
+                <tr>
+                  <td>{{ row.id }}</td>
+                  <td>{{ row.title }}</td>
+                  <td>{{ row.start_date or 'N/A' }}</td>
+                  <td>{{ row.language or 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+      </main>
+    </div>
+
+    <script>
+      const keywordCountInput = document.getElementById('keyword_count');
+      const keywordFields = document.getElementById('keywordFields');
+      const addKeywordBtn = document.getElementById('addKeywordBtn');
+
+      function syncKeywordInputs() {
+        const count = Math.max(1, Math.min(10, Number(keywordCountInput.value || 1)));
+        keywordCountInput.value = count;
+        const existing = Array.from(keywordFields.querySelectorAll('.keyword-row'));
+        const rows = [];
+        for (let i = 1; i <= count; i += 1) {
+          let row = existing[i - 1];
+          if (!row) {
+            row = document.createElement('div');
+            row.className = 'keyword-row';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = `keyword_${i}`;
+            input.placeholder = `Enter keyword ${i}`;
+            row.appendChild(input);
+          }
+          rows.push(row);
+        }
+        keywordFields.innerHTML = '';
+        rows.forEach((row) => keywordFields.appendChild(row));
+      }
+
+      keywordCountInput.addEventListener('input', syncKeywordInputs);
+      addKeywordBtn.addEventListener('click', () => {
+        const current = Number(keywordCountInput.value || 1);
+        keywordCountInput.value = Math.min(10, current + 1);
+        syncKeywordInputs();
+      });
+
+      syncKeywordInputs();
+    </script>
+  </body>
+</html>

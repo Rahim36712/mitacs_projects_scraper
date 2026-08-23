@@ -1,0 +1,65 @@
+[
+  {
+    "raw": "The application deadline is Thursday,\nSeptember 16, 2026 at 1 p.m. Pacific Time (PT)\n.\nPlease view the list of available projects below.\nUse the search and filter fields below to narrow down your search results.\nYou must login to apply to projects.\nTo add a project to your application after logging in, click the “View Detail” and then “Apply” buttons. It will now appear in the “My Projects” section of your application.\nTotal number of projects: 3359\nApplicants are asked not to contact faculty supervisors directly\nSearch and Filter Globalink Projects\nKeyword search\nLanguage\nAny\nFaculty Province\nAny\nFaculty University\nAny\nFaculty Campus\nAny\nFaculty First Name\nFaculty Last Name\nFaculty academic discipline\nAny\nPreferred student academic background\nAny\nSearch and Filter\nReset Search and Filter",
+    "supervisor": null,
+    "university": null,
+    "province": null,
+    "location": null
+  },
+  {
+    "raw": "Faculty supervisor:\nDomenico\nSantoro\nFaculty Province:\nOntario\nFaculty University:\nWestern University\nFaculty Campus:\nLondon\nProject Location:\nlondon ontario, Ontario\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Domenico",
+    "university": "Western University",
+    "province": "Ontario",
+    "location": "london ontario, Ontario"
+  },
+  {
+    "raw": "Faculty supervisor:\nJessica\nANDRIAMASINORO\nFaculty Province:\nNew Brunswick\nFaculty University:\nUniversité de Moncton\nFaculty Campus:\nShippagan\nProject Location:\nShippagan, New Brunswick\nLanguage:\nFrench\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Jessica",
+    "university": "Université de Moncton",
+    "province": "New Brunswick",
+    "location": "Shippagan, New Brunswick"
+  },
+  {
+    "raw": "Faculty supervisor:\nMohammad\nZarifi\nFaculty Province:\nBritish Columbia\nFaculty University:\nUniversity of British Columbia\nFaculty Campus:\nOkanagan\nProject Location:\nKelowna, British Columbia\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Mohammad",
+    "university": "University of British Columbia",
+    "province": "British Columbia",
+    "location": "Kelowna, British Columbia"
+  },
+  {
+    "raw": "Faculty supervisor:\ndecio\ncoviello\nFaculty Province:\nQuébec\nFaculty University:\nHEC Montréal\nFaculty Campus:\nMontréal\nProject Location:\nMontreal, Québec\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "decio",
+    "university": "HEC Montréal",
+    "province": "Québec",
+    "location": "Montreal, Québec"
+  },
+  {
+    "raw": "Faculty supervisor:\nBala\nNikku\nFaculty Province:\nBritish Columbia\nFaculty University:\nThompson Rivers University\nFaculty Campus:\nKamloops\nProject Location:\nKamloops, British Columbia\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Bala",
+    "university": "Thompson Rivers University",
+    "province": "British Columbia",
+    "location": "Kamloops, British Columbia"
+  },
+  {
+    "raw": "Faculty supervisor:\nHaibo\nFeng\nFaculty Province:\nBritish Columbia\nFaculty University:\nUniversity of British Columbia\nFaculty Campus:\nVancouver\nProject Location:\nVancouver, British Columbia\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Haibo",
+    "university": "University of British Columbia",
+    "province": "British Columbia",
+    "location": "Vancouver, British Columbia"
+  },
+  {
+    "raw": "Faculty supervisor:\nRishi\nGupta\nFaculty Province:\nBritish Columbia\nFaculty University:\nUniversity of Victoria\nFaculty Campus:\nVictoria\nProject Location:\nVictoria, British Columbia\nLanguage:\nEnglish\nPreferred start date:\n2027-05-03 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Rishi",
+    "university": "University of Victoria",
+    "province": "British Columbia",
+    "location": "Victoria, British Columbia"
+  },
+  {
+    "raw": "Faculty supervisor:\nAmanda\nDe Lisio\nFaculty Province:\nOntario\nFaculty University:\nYork University\nFaculty Campus:\nToronto\nProject Location:\nToronto, Ontario\nLanguage:\nEnglish\nPreferred start date:\n2027-06-01 (yyyy-mm-dd)\nView Detail",
+    "supervisor": "Amanda",
+    "university": "York University",
+    "province": "Ontario",
+    "location": "Toronto, Ontario"
+  }
+]
