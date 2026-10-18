@@ -1,6 +1,10 @@
+import atexit
 import os
 import re
+import subprocess
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -16,6 +20,72 @@ from mitacs_scraper.scraper.final_ui_scraper import count_keyword, scrape_keywor
 BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "data" / "ui_exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+START_MONOTONIC = time.monotonic()
+WATCHDOG_STATE = {"last_beat": 0.0, "jobs": 0, "stopping": False}
+STATE_LOCK = threading.Lock()
+HEARTBEAT_TIMEOUT_S = float(os.environ.get("MITACS_BEAT_TIMEOUT", "80"))
+WARMUP_S = float(os.environ.get("MITACS_WARMUP", "25"))
+
+
+def kill_leftover_browsers() -> None:
+    token = f"x-mitacs-owner={os.getpid()}"
+    venv_path = str(PROJECT_ROOT / ".venv")
+    wql_filters = [
+        f"Name='chrome.exe' AND CommandLine LIKE '%{token}%'",
+        f"Name='node.exe' AND CommandLine LIKE '%{venv_path}%playwright%driver%'",
+    ]
+    for wql in wql_filters:
+        ps_command = (
+            "$ErrorActionPreference='SilentlyContinue';"
+            f"$ids = Get-CimInstance Win32_Process -Filter \"{wql}\" | "
+            "Select-Object -ExpandProperty ProcessId;"
+            "if ($ids) { $ids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }"
+        )
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_command],
+                capture_output=True,
+                timeout=20,
+            )
+        except Exception:
+            pass
+
+
+atexit.register(kill_leftover_browsers)
+
+
+def _shutdown() -> None:
+    with STATE_LOCK:
+        if WATCHDOG_STATE["stopping"]:
+            return
+        WATCHDOG_STATE["stopping"] = True
+    print("\n[i] UI closed — stopping server and cleaning up browser processes...")
+    sys.stdout.flush()
+    kill_leftover_browsers()
+    os._exit(0)
+
+
+def _watchdog_loop() -> None:
+    while True:
+        time.sleep(2)
+        try:
+            with STATE_LOCK:
+                if WATCHDOG_STATE["stopping"]:
+                    return
+                beat = WATCHDOG_STATE["last_beat"]
+                jobs = WATCHDOG_STATE["jobs"]
+            idle_too_long = (
+                beat > 0
+                and jobs == 0
+                and (time.time() - beat) > HEARTBEAT_TIMEOUT_S
+                and (time.monotonic() - START_MONOTONIC) > WARMUP_S
+            )
+            if idle_too_long:
+                _shutdown()
+                return
+        except Exception:
+            pass
 
 FILTER_KEYS = [
     "language",
@@ -163,6 +233,7 @@ def run_batch_scrape(
 def create_app() -> Flask:
     app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
     app.config["SECRET_KEY"] = os.environ.get("MITACS_SECRET_KEY", "mitacs-dev-secret")
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     @app.after_request
     def add_cors_headers(response):
@@ -174,6 +245,13 @@ def create_app() -> Flask:
     @app.route("/health")
     @app.route("/api/health")
     def health():
+        return {"status": "ok"}
+
+    @app.route("/api/heartbeat", methods=["GET", "POST"])
+    def heartbeat():
+        with STATE_LOCK:
+            WATCHDOG_STATE["last_beat"] = time.time()
+            WATCHDOG_STATE["stopping"] = False
         return {"status": "ok"}
 
     @app.route("/")
@@ -200,7 +278,14 @@ def create_app() -> Flask:
         max_pages = parse_max_pages((payload or {}).get("max_pages", 0))
         filters = parse_filters(payload or {})
 
-        results = run_batch_scrape(keywords, max_pages, export_format, filters)
+        with STATE_LOCK:
+            WATCHDOG_STATE["last_beat"] = time.time()
+            WATCHDOG_STATE["jobs"] += 1
+        try:
+            results = run_batch_scrape(keywords, max_pages, export_format, filters)
+        finally:
+            with STATE_LOCK:
+                WATCHDOG_STATE["jobs"] -= 1
         files: List[Dict[str, str]] = []
         response_items: List[Dict[str, Any]] = []
         total_records = 0
@@ -259,37 +344,62 @@ def create_app() -> Flask:
 
         filters = parse_filters(payload)
 
-        def count_one(keyword: str) -> Dict[str, Any]:
-            try:
-                info = count_keyword(keyword, filters=filters)
-                return {
-                    "keyword": keyword,
-                    "total_projects": info.get("total_projects", 0),
-                    "per_page": info.get("per_page", 0),
-                    "total_pages": info.get("total_pages", 0),
-                    "error": None,
-                }
-            except Exception as exc:
-                return {
-                    "keyword": keyword,
-                    "total_projects": 0,
-                    "per_page": 0,
-                    "total_pages": 0,
-                    "error": str(exc),
-                }
+        with STATE_LOCK:
+            WATCHDOG_STATE["last_beat"] = time.time()
+            WATCHDOG_STATE["jobs"] += 1
+        try:
+            def count_one(keyword: str) -> Dict[str, Any]:
+                try:
+                    info = count_keyword(keyword, filters=filters)
+                    return {
+                        "keyword": keyword,
+                        "total_projects": info.get("total_projects", 0),
+                        "per_page": info.get("per_page", 0),
+                        "total_pages": info.get("total_pages", 0),
+                        "error": None,
+                    }
+                except Exception as exc:
+                    return {
+                        "keyword": keyword,
+                        "total_projects": 0,
+                        "per_page": 0,
+                        "total_pages": 0,
+                        "error": str(exc),
+                    }
 
-        with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
-            results = list(executor.map(count_one, keywords))
+            with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
+                results = list(executor.map(count_one, keywords))
+        finally:
+            with STATE_LOCK:
+                WATCHDOG_STATE["jobs"] -= 1
 
         return jsonify({
             "total_keywords": len(keywords),
             "results": results,
         })
 
+    @app.route("/api/exports", methods=["GET"])
+    def api_exports():
+        items: List[Dict[str, Any]] = []
+        try:
+            paths = [p for p in EXPORT_DIR.iterdir() if p.is_file() and p.suffix.lower() in {".csv", ".md"}]
+            for path in sorted(paths, key=lambda p: p.stat().st_mtime, reverse=True):
+                stat = path.stat()
+                items.append({
+                    "name": path.name,
+                    "size": stat.st_size,
+                    "modified": int(stat.st_mtime),
+                    "url": url_for("download_file", filename=path.name, _external=True),
+                })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+        return jsonify({"count": len(items), "files": items})
+
     @app.route("/download/<path:filename>")
     def download_file(filename: str):
         return send_from_directory(EXPORT_DIR, filename, as_attachment=True)
 
+    threading.Thread(target=_watchdog_loop, name="mitacs-watchdog", daemon=True).start()
     return app
 
 

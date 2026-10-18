@@ -26,8 +26,10 @@ A user-friendly scraper for MITACS Globalink projects that runs **entirely on yo
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/api/health` | GET | health check |
+| `/api/heartbeat` | GET/POST | UI keep-alive ping (auto-shutdown watchdog) |
 | `/api/count` | POST | pages/projects available per keyword (no scraping) |
 | `/api/scrape` | POST | run scraping + generate export files |
+| `/api/exports` | GET | list previously generated export files |
 | `/download/<file>` | GET | download an exported file |
 
 Example page-count request:
@@ -51,6 +53,7 @@ Generated files are saved in `mitacs_scraper/data/ui_exports/`.
 
 - Playwright drives a headless Chromium because the MITACS project search is dynamic.
 - Scraping many pages can take a while — the UI keeps you posted.
+- **Auto-shutdown:** when you close the UI tab/window, the backend stops itself and cleans up any leftover browser processes. An in-progress scrape always finishes first. Closing the console window also stops everything.
 - For educational and research use only.
 
 ## License
